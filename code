@@ -1,0 +1,76 @@
+#include <ESP8266WiFi.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+// Replace these values with your WiFi credentials and ThingSpeak API key
+const char* ssid = "YourWiFiSSID";
+const char* password = "YourWiFiPassword";
+const char* apiKey = "YourThingSpeakAPIKey";
+
+// Initialize BME280 sensor
+#define SEALEVELPRESSURE_HPA (1013.25)
+Adafruit_BME280 bme;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected");
+
+  // Initialize BME280 sensor
+  if (!bme.begin(0x76)) {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    while (1);
+  }
+}
+
+void loop() {
+  // Read sensor data
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
+  float pressure = bme.readPressure() / 100.0F; // Pressure in hPa
+
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.println(" °C");
+  Serial.print("Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+  Serial.print("Pressure: ");
+  Serial.print(pressure);
+  Serial.println(" hPa");
+
+  // Send data to ThingSpeak
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+
+    // Prepare data string
+    String data = "field1=" + String(temperature) + "&field2=" + String(humidity) + "&field3=" + String(pressure);
+    String url = "http://api.thingspeak.com/update?api_key=" + String(apiKey) + "&" + data;
+
+    // Send HTTP GET request
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: api.thingspeak.com\r\n" +
+                 "Connection: close\r\n\r\n");
+    Serial.println("Sending data to ThingSpeak...");
+
+    delay(1000); // Wait for server response
+    while (client.available()) {
+      String line = client.readStringUntil('\r');
+      Serial.print(line);
+    }
+    client.stop();
+    Serial.println("\nData sent to ThingSpeak");
+  } else {
+    Serial.println("WiFi not connected. Unable to send data to ThingSpeak.");
+  }
+
+  delay(10000); // Adjust the delay time as needed
+}
